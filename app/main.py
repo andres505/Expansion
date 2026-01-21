@@ -34,8 +34,8 @@ def run_expansion(payload: ExpansionRequest):
     nearest_store = get_nearest_neto_store(
         lat=input_data["latitud"],
         lon=input_data["longitud"],
-        df_neto=df_neto
-    )
+        df_stores=df_neto
+)
 
     # 4. Construir payload base del pipeline
     payload_flat = build_payload_flat(

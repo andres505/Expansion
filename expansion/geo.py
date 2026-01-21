@@ -53,7 +53,10 @@ def _safe_float(x):
 # =====================================================
 # CARGA MASTER NETO
 # =====================================================
-def load_neto_master(excel_path: str) -> pd.DataFrame:
+def load_neto_master(
+    excel_path: str = "data/MASTER_FINAL_TIENDAS.xlsx"
+) -> pd.DataFrame:
+
     """
     Carga y normaliza el master de tiendas NETO.
     """
