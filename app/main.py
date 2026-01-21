@@ -32,6 +32,22 @@ from expansion.payload_builder import build_payload_flat
 from expansion.inegi_loader import download_inegi_from_drive
 import geopandas as gpd
 
+import math
+
+def sanitize_for_json(obj):
+    """
+    Convierte NaN / inf a None recursivamente.
+    """
+    if isinstance(obj, dict):
+        return {k: sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_for_json(v) for v in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    else:
+        return obj
 
 # =====================================================
 # GLOBALS (SE CARGAN UNA VEZ)
@@ -159,16 +175,9 @@ def run_expansion(payload: ExpansionRequest):
     # ---------------------------
     # PAYLOAD FINAL BASE
     # ---------------------------
-    payload_flat = build_payload_flat(
-        lat=lat,
-        lon=lon,
-        neto_data=nearest_store,
-        inegi_data=inegi_data,
-        places_count={},        # siguiente módulo
-        competencia_data={}     # siguiente módulo
-    )
+    payload_flat = sanitize_for_json(payload_flat)
 
     return {
         "status": "base_pipeline_ok",
         "payload_flat": payload_flat
-    }
+}
