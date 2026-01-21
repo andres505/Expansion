@@ -12,3 +12,8 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+data/google_places/
+outputs/google_places/
+# Google Places outputs
+
+*.csv

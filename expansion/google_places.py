@@ -25,12 +25,13 @@ POI_TYPES = [
     "park", "stadium", "cemetery"
 ]
 
+
 # ======================================================
-# GOOGLE MAPS CLIENT (HARDCODE TEMPORAL)
-
+# GOOGLE MAPS CLIENT
+# ======================================================
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
-
 gmaps = googlemaps.Client(key=GOOGLE_MAPS_API_KEY)
+
 
 # ======================================================
 # FUNCIÓN PRINCIPAL
@@ -42,10 +43,10 @@ def fetch_places_nearby(
     lon: float,
     radius_m: int = 500,
     sleep_s: float = 1.0,
-    output_dir: str = "outputs/google_places",
+    output_dir: str = "data/google_places",
 ):
     """
-    Consulta Google Places Nearby.
+    Consulta Google Places Nearby y guarda TODO en CSV.
 
     Retorna:
     - df_places (DataFrame)
@@ -53,21 +54,20 @@ def fetch_places_nearby(
     - csv_path (str)
     """
 
-    os.makedirs(output_dir, exist_ok=True)
+    # ---------------------------
+    # Carpeta por folio
+    # ---------------------------
+    folio_dir = os.path.join(output_dir, f"folio_{folio}")
+    os.makedirs(folio_dir, exist_ok=True)
+
+    csv_path = os.path.join(folio_dir, "raw_places.csv")
 
     all_rows = []
     conteo = defaultdict(int)
 
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    lat_str = f"{lat:.6f}".replace(".", "_")
-    lon_str = f"{lon:.6f}".replace(".", "_")
-
-    csv_name = (
-        f"google_places_folio_{folio}_"
-        f"lat_{lat_str}_lon_{lon_str}_{timestamp}.csv"
-    )
-    csv_path = os.path.join(output_dir, csv_name)
-
+    # ---------------------------
+    # Loop por tipo de POI
+    # ---------------------------
     for poi_type in POI_TYPES:
         response = gmaps.places_nearby(
             location=(lat, lon),
@@ -105,6 +105,7 @@ def fetch_places_nearby(
                         r.get("opening_hours"), ensure_ascii=False
                     ),
 
+                    # GUARDA TODO
                     "raw_json": json.dumps(r, ensure_ascii=False)
                 })
 
@@ -118,6 +119,9 @@ def fetch_places_nearby(
 
         time.sleep(sleep_s)
 
+    # ---------------------------
+    # Persistencia
+    # ---------------------------
     df_places = pd.DataFrame(all_rows)
     df_places.to_csv(csv_path, index=False, encoding="utf-8-sig")
 
