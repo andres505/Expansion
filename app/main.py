@@ -2,12 +2,13 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import os
 import pandas as pd
+import geopandas as gpd
+import math
 
 # =====================================================
 # APP
 # =====================================================
 app = FastAPI(title="Expansion NETO API")
-
 
 # =====================================================
 # MODELO DE ENTRADA
@@ -30,14 +31,13 @@ from expansion.geo import load_neto_master, get_nearest_neto_store
 from expansion.inegi import find_municipio_inegi, prefix_inegi_keys
 from expansion.payload_builder import build_payload_flat
 from expansion.inegi_loader import download_inegi_from_drive
-import geopandas as gpd
 
-import math
 
+# =====================================================
+# UTILIDADES
+# =====================================================
 def sanitize_for_json(obj):
-    """
-    Convierte NaN / inf a None recursivamente.
-    """
+    """Convierte NaN / inf a None recursivamente."""
     if isinstance(obj, dict):
         return {k: sanitize_for_json(v) for k, v in obj.items()}
     elif isinstance(obj, list):
@@ -48,6 +48,7 @@ def sanitize_for_json(obj):
         return obj
     else:
         return obj
+
 
 # =====================================================
 # GLOBALS (SE CARGAN UNA VEZ)
@@ -75,7 +76,6 @@ def startup():
     # INEGI GEO (Shapefile)
     # ---------------------------
     folder_id = os.environ.get("INEGI_DRIVE_FOLDER_ID")
-
     inegi_shp = "data/inegi/municipios/00mun.shp"
 
     if folder_id and not os.path.exists(inegi_shp):
@@ -83,8 +83,6 @@ def startup():
 
     if os.path.exists(inegi_shp):
         GDF_INEGI = gpd.read_file(inegi_shp)
-        if GDF_INEGI.crs is None:
-            GDF_INEGI = GDF_INEGI.set_crs(epsg=4326)
     else:
         GDF_INEGI = None
 
@@ -97,13 +95,12 @@ def startup():
             dtype=str
         )
 
-        # Normalización INEGI
         DF_INEGI_TABULAR["CVE_ENT"] = DF_INEGI_TABULAR["CVE_ENT"].str.zfill(2)
         DF_INEGI_TABULAR["CVE_MUN"] = DF_INEGI_TABULAR["CVE_MUN"].str.zfill(3)
 
         DF_INEGI_TABULAR["CVEGEO"] = (
-            DF_INEGI_TABULAR["CVE_ENT"]
-            + DF_INEGI_TABULAR["CVE_MUN"]
+            DF_INEGI_TABULAR["CVE_ENT"] +
+            DF_INEGI_TABULAR["CVE_MUN"]
         )
 
     except Exception:
@@ -124,60 +121,84 @@ def health():
 @app.post("/run-expansion")
 def run_expansion(payload: ExpansionRequest):
 
-    # ---------------------------
-    # INPUT
-    # ---------------------------
-    input_data = payload.model_dump()
-    lat = input_data["latitud"]
-    lon = input_data["longitud"]
+    try:
+        # ---------------------------
+        # INPUT
+        # ---------------------------
+        input_data = payload.model_dump()
+        lat = input_data["latitud"]
+        lon = input_data["longitud"]
 
-    # ---------------------------
-    # NETO MÁS CERCANA
-    # ---------------------------
-    nearest_store = get_nearest_neto_store(
-        lat=lat,
-        lon=lon,
-        df_stores=DF_NETO
-    )
-
-    # ---------------------------
-    # INEGI GEO
-    # ---------------------------
-    inegi_geo_raw = {}
-    if GDF_INEGI is not None:
-        inegi_geo_raw = find_municipio_inegi(
+        # ---------------------------
+        # NETO MÁS CERCANA
+        # ---------------------------
+        nearest_store = get_nearest_neto_store(
             lat=lat,
             lon=lon,
-            gdf_inegi=GDF_INEGI
+            df_stores=DF_NETO
         )
 
-    # ---------------------------
-    # INEGI TABULAR (por CVEGEO)
-    # ---------------------------
-    inegi_tab_raw = {}
-    cvegeo = inegi_geo_raw.get("CVEGEO")
+        # ---------------------------
+        # INEGI GEO
+        # ---------------------------
+        inegi_geo_raw = {}
+        if GDF_INEGI is not None:
+            inegi_geo_raw = find_municipio_inegi(
+                lat=lat,
+                lon=lon,
+                gdf_inegi=GDF_INEGI
+            )
 
-    if cvegeo and DF_INEGI_TABULAR is not None:
-        row = DF_INEGI_TABULAR.loc[
-            DF_INEGI_TABULAR["CVEGEO"] == str(cvegeo)
-        ]
-        if not row.empty:
-            inegi_tab_raw = row.iloc[0].to_dict()
+        # ---------------------------
+        # INEGI TABULAR
+        # ---------------------------
+        inegi_tab_raw = {}
+        cve_ent = inegi_geo_raw.get("CVE_ENT")
+        cve_mun = inegi_geo_raw.get("CVE_MUN")
 
-    # ---------------------------
-    # MERGE + PREFIJO INEGI_
-    # ---------------------------
-    inegi_data = prefix_inegi_keys({
-        **inegi_geo_raw,
-        **inegi_tab_raw
-    })
+        if (
+            cve_ent is not None
+            and cve_mun is not None
+            and DF_INEGI_TABULAR is not None
+        ):
+            cvegeo = f"{str(cve_ent).zfill(2)}{str(cve_mun).zfill(3)}"
 
-    # ---------------------------
-    # PAYLOAD FINAL BASE
-    # ---------------------------
-    payload_flat = sanitize_for_json(payload_flat)
+            row = DF_INEGI_TABULAR.loc[
+                DF_INEGI_TABULAR["CVEGEO"] == cvegeo
+            ]
 
-    return {
-        "status": "base_pipeline_ok",
-        "payload_flat": payload_flat
-}
+            if not row.empty:
+                inegi_tab_raw = row.iloc[0].to_dict()
+
+        # ---------------------------
+        # MERGE + PREFIJO INEGI_
+        # ---------------------------
+        inegi_data = prefix_inegi_keys({
+            **inegi_geo_raw,
+            **inegi_tab_raw
+        })
+
+        # ---------------------------
+        # PAYLOAD FINAL BASE
+        # ---------------------------
+        payload_flat = build_payload_flat(
+            lat=lat,
+            lon=lon,
+            neto_data=nearest_store,
+            inegi_data=inegi_data,
+            places_count={},
+            competencia_data={}
+        )
+
+        payload_flat = sanitize_for_json(payload_flat)
+
+        return {
+            "status": "base_pipeline_ok",
+            "payload_flat": payload_flat
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
