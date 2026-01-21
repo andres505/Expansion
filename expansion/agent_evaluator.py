@@ -1,17 +1,17 @@
 import json
 from typing import Dict, Any
 from openai import OpenAI
-
+import os
 from expansion.prompt_builder import build_expansion_prompt_semaforo_v12
 
 
 # --------------------------------------------------
 # Cliente OpenAI
 # --------------------------------------------------
-import os
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
+if not GOOGLE_MAPS_API_KEY:
+    raise RuntimeError("GOOGLE_MAPS_API_KEY not set")
 
 
 # --------------------------------------------------
