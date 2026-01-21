@@ -10,6 +10,7 @@ import math
 # =====================================================
 app = FastAPI(title="Expansion NETO API")
 
+
 # =====================================================
 # MODELO DE ENTRADA
 # =====================================================
@@ -34,7 +35,7 @@ from expansion.inegi_loader import download_inegi_from_drive
 
 
 # =====================================================
-# UTILIDADES
+# UTILS
 # =====================================================
 def sanitize_for_json(obj):
     """Convierte NaN / inf a None recursivamente."""
@@ -51,7 +52,7 @@ def sanitize_for_json(obj):
 
 
 # =====================================================
-# GLOBALS (SE CARGAN UNA VEZ)
+# GLOBALS (CARGA ÚNICA)
 # =====================================================
 DF_NETO = None
 GDF_INEGI = None
@@ -73,7 +74,7 @@ def startup():
     )
 
     # ---------------------------
-    # INEGI GEO (Shapefile)
+    # INEGI GEO (SHAPEFILE)
     # ---------------------------
     folder_id = os.environ.get("INEGI_DRIVE_FOLDER_ID")
     inegi_shp = "data/inegi/municipios/00mun.shp"
@@ -83,18 +84,20 @@ def startup():
 
     if os.path.exists(inegi_shp):
         GDF_INEGI = gpd.read_file(inegi_shp)
+
+        # 🔑 FIX CRS
+        if GDF_INEGI.crs is None or GDF_INEGI.crs.to_epsg() != 4326:
+            GDF_INEGI = GDF_INEGI.to_crs(epsg=4326)
     else:
         GDF_INEGI = None
 
     # ---------------------------
-    # INEGI TABULAR (CSV hogares)
+    # INEGI TABULAR (CSV HOGARES)
     # ---------------------------
     try:
-        DF_INEGI_TABULAR = pd.read_csv(
-            "data/data_hogares.csv",
-            dtype=str
-        )
+        DF_INEGI_TABULAR = pd.read_csv("data/data_hogares.csv", dtype=str)
 
+        # Normalización INEGI
         DF_INEGI_TABULAR["CVE_ENT"] = DF_INEGI_TABULAR["CVE_ENT"].str.zfill(2)
         DF_INEGI_TABULAR["CVE_MUN"] = DF_INEGI_TABULAR["CVE_MUN"].str.zfill(3)
 
@@ -121,84 +124,69 @@ def health():
 @app.post("/run-expansion")
 def run_expansion(payload: ExpansionRequest):
 
-    try:
-        # ---------------------------
-        # INPUT
-        # ---------------------------
-        input_data = payload.model_dump()
-        lat = input_data["latitud"]
-        lon = input_data["longitud"]
+    # ---------------------------
+    # INPUT
+    # ---------------------------
+    input_data = payload.model_dump()
+    lat = input_data["latitud"]
+    lon = input_data["longitud"]
 
-        # ---------------------------
-        # NETO MÁS CERCANA
-        # ---------------------------
-        nearest_store = get_nearest_neto_store(
+    # ---------------------------
+    # NETO MÁS CERCANA
+    # ---------------------------
+    nearest_store = get_nearest_neto_store(
+        lat=lat,
+        lon=lon,
+        df_stores=DF_NETO
+    )
+
+    # ---------------------------
+    # INEGI GEO
+    # ---------------------------
+    inegi_geo_raw = {}
+    if GDF_INEGI is not None:
+        inegi_geo_raw = find_municipio_inegi(
             lat=lat,
             lon=lon,
-            df_stores=DF_NETO
+            gdf_inegi=GDF_INEGI
         )
 
-        # ---------------------------
-        # INEGI GEO
-        # ---------------------------
-        inegi_geo_raw = {}
-        if GDF_INEGI is not None:
-            inegi_geo_raw = find_municipio_inegi(
-                lat=lat,
-                lon=lon,
-                gdf_inegi=GDF_INEGI
-            )
+    # ---------------------------
+    # INEGI TABULAR (POR CVEGEO)
+    # ---------------------------
+    inegi_tab_raw = {}
+    cvegeo = inegi_geo_raw.get("CVEGEO")
 
-        # ---------------------------
-        # INEGI TABULAR
-        # ---------------------------
-        inegi_tab_raw = {}
-        cve_ent = inegi_geo_raw.get("CVE_ENT")
-        cve_mun = inegi_geo_raw.get("CVE_MUN")
+    if cvegeo and DF_INEGI_TABULAR is not None:
+        row = DF_INEGI_TABULAR.loc[
+            DF_INEGI_TABULAR["CVEGEO"] == str(cvegeo)
+        ]
+        if not row.empty:
+            inegi_tab_raw = row.iloc[0].to_dict()
 
-        if (
-            cve_ent is not None
-            and cve_mun is not None
-            and DF_INEGI_TABULAR is not None
-        ):
-            cvegeo = f"{str(cve_ent).zfill(2)}{str(cve_mun).zfill(3)}"
+    # ---------------------------
+    # MERGE + PREFIJO INEGI_
+    # ---------------------------
+    inegi_data = prefix_inegi_keys({
+        **inegi_geo_raw,
+        **inegi_tab_raw
+    })
 
-            row = DF_INEGI_TABULAR.loc[
-                DF_INEGI_TABULAR["CVEGEO"] == cvegeo
-            ]
+    # ---------------------------
+    # PAYLOAD FINAL BASE
+    # ---------------------------
+    payload_flat = build_payload_flat(
+        lat=lat,
+        lon=lon,
+        neto_data=nearest_store,
+        inegi_data=inegi_data,
+        places_count={},        # siguiente módulo
+        competencia_data={}     # siguiente módulo
+    )
 
-            if not row.empty:
-                inegi_tab_raw = row.iloc[0].to_dict()
+    payload_flat = sanitize_for_json(payload_flat)
 
-        # ---------------------------
-        # MERGE + PREFIJO INEGI_
-        # ---------------------------
-        inegi_data = prefix_inegi_keys({
-            **inegi_geo_raw,
-            **inegi_tab_raw
-        })
-
-        # ---------------------------
-        # PAYLOAD FINAL BASE
-        # ---------------------------
-        payload_flat = build_payload_flat(
-            lat=lat,
-            lon=lon,
-            neto_data=nearest_store,
-            inegi_data=inegi_data,
-            places_count={},
-            competencia_data={}
-        )
-
-        payload_flat = sanitize_for_json(payload_flat)
-
-        return {
-            "status": "base_pipeline_ok",
-            "payload_flat": payload_flat
-        }
-
-    except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e)
-        }
+    return {
+        "status": "base_pipeline_ok",
+        "payload_flat": payload_flat
+    }
