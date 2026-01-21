@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import os
+import pandas as pd
 
 # =========================
 # APP
@@ -26,7 +27,11 @@ class ExpansionRequest(BaseModel):
 # IMPORTS PIPELINE
 # =========================
 from expansion.geo import load_neto_master, get_nearest_neto_store
-from expansion.inegi import load_inegi_gdf, find_municipio_inegi
+from expansion.inegi import (
+    load_inegi_gdf,
+    find_municipio_inegi,
+    prefix_inegi_keys
+)
 from expansion.payload_builder import build_payload_flat
 from expansion.inegi_loader import download_inegi_from_drive
 
@@ -36,6 +41,7 @@ from expansion.inegi_loader import download_inegi_from_drive
 # =========================
 DF_NETO = None
 GDF_INEGI = None
+DF_INEGI_TABULAR = None
 
 
 # =========================
@@ -44,23 +50,34 @@ GDF_INEGI = None
 @app.on_event("startup")
 def startup():
 
-    global DF_NETO, GDF_INEGI
+    global DF_NETO, GDF_INEGI, DF_INEGI_TABULAR
 
     # --- NETO MASTER ---
     DF_NETO = load_neto_master(
         excel_path="data/MASTER_FINAL_TIENDAS.xlsx"
     )
 
-    # --- INEGI ---
+    # --- INEGI GEO (Drive) ---
     folder_id = os.environ.get("INEGI_DRIVE_FOLDER_ID")
-    if not folder_id:
-        raise RuntimeError("INEGI_DRIVE_FOLDER_ID not set")
+    if folder_id:
+        download_inegi_from_drive(folder_id)
 
-    download_inegi_from_drive(folder_id)
+        inegi_shp = "data/inegi/municipios/00mun.shp"
+        if os.path.exists(inegi_shp):
+            GDF_INEGI = load_inegi_gdf(inegi_shp)
+        else:
+            GDF_INEGI = None
+    else:
+        GDF_INEGI = None
 
-    GDF_INEGI = load_inegi_gdf(
-        "data/inegi/municipios/00mun.shp"
-    )
+    # --- INEGI TABULAR (CSV hogares) ---
+    try:
+        DF_INEGI_TABULAR = pd.read_csv(
+            "data/data_hogares.csv",
+            dtype={"CVEGEO": str}
+        )
+    except Exception:
+        DF_INEGI_TABULAR = None
 
 
 # =========================
@@ -90,19 +107,34 @@ def run_expansion(payload: ExpansionRequest):
         df_stores=DF_NETO
     )
 
-    # 3. INEGI
-    inegi_raw = find_municipio_inegi(
-        lat=lat,
-        lon=lon,
-        gdf_inegi=GDF_INEGI
-    )
+    # 3. INEGI GEO
+    if GDF_INEGI is not None:
+        inegi_geo_raw = find_municipio_inegi(
+            lat=lat,
+            lon=lon,
+            gdf_inegi=GDF_INEGI
+        )
+    else:
+        inegi_geo_raw = {}
 
-    inegi_data = {
-        f"INEGI_{k}": v
-        for k, v in inegi_raw.items()
-    }
+    # 4. INEGI TABULAR (CSV por CVEGEO)
+    inegi_tab_raw = {}
+    cvegeo = inegi_geo_raw.get("CVEGEO")
 
-    # 4. Payload plano base
+    if cvegeo and DF_INEGI_TABULAR is not None:
+        row = DF_INEGI_TABULAR.loc[
+            DF_INEGI_TABULAR["CVEGEO"] == str(cvegeo)
+        ]
+        if not row.empty:
+            inegi_tab_raw = row.iloc[0].to_dict()
+
+    # 5. Merge + prefijo INEGI_*
+    inegi_data = prefix_inegi_keys({
+        **inegi_geo_raw,
+        **inegi_tab_raw
+    })
+
+    # 6. Payload plano base
     payload_flat = build_payload_flat(
         lat=lat,
         lon=lon,
