@@ -32,6 +32,7 @@ from expansion.geo import load_neto_master, get_nearest_neto_store
 from expansion.inegi import find_municipio_inegi, prefix_inegi_keys
 from expansion.payload_builder import build_payload_flat
 from expansion.inegi_loader import download_inegi_from_drive
+from expansion.google_places import fetch_places_nearby
 
 
 # =====================================================
@@ -52,7 +53,7 @@ def sanitize_for_json(obj):
 
 
 # =====================================================
-# GLOBALS (CARGA ÚNICA)
+# GLOBALS (SE CARGAN UNA VEZ)
 # =====================================================
 DF_NETO = None
 GDF_INEGI = None
@@ -85,7 +86,7 @@ def startup():
     if os.path.exists(inegi_shp):
         GDF_INEGI = gpd.read_file(inegi_shp)
 
-        # 🔑 FIX CRS
+        # 🔑 CRS FIX (OBLIGATORIO)
         if GDF_INEGI.crs is None or GDF_INEGI.crs.to_epsg() != 4326:
             GDF_INEGI = GDF_INEGI.to_crs(epsg=4326)
     else:
@@ -97,7 +98,6 @@ def startup():
     try:
         DF_INEGI_TABULAR = pd.read_csv("data/data_hogares.csv", dtype=str)
 
-        # Normalización INEGI
         DF_INEGI_TABULAR["CVE_ENT"] = DF_INEGI_TABULAR["CVE_ENT"].str.zfill(2)
         DF_INEGI_TABULAR["CVE_MUN"] = DF_INEGI_TABULAR["CVE_MUN"].str.zfill(3)
 
@@ -130,6 +130,7 @@ def run_expansion(payload: ExpansionRequest):
     input_data = payload.model_dump()
     lat = input_data["latitud"]
     lon = input_data["longitud"]
+    folio = input_data["id_ubicacion"]
 
     # ---------------------------
     # NETO MÁS CERCANA
@@ -173,6 +174,16 @@ def run_expansion(payload: ExpansionRequest):
     })
 
     # ---------------------------
+    # GOOGLE PLACES (GUARDA CSV)
+    # ---------------------------
+    df_places, places_count, csv_path = fetch_places_nearby(
+        folio=folio,
+        lat=lat,
+        lon=lon,
+        radius_m=500
+    )
+
+    # ---------------------------
     # PAYLOAD FINAL BASE
     # ---------------------------
     payload_flat = build_payload_flat(
@@ -180,13 +191,14 @@ def run_expansion(payload: ExpansionRequest):
         lon=lon,
         neto_data=nearest_store,
         inegi_data=inegi_data,
-        places_count={},        # siguiente módulo
-        competencia_data={}     # siguiente módulo
+        places_count=places_count,
+        competencia_data={}
     )
 
     payload_flat = sanitize_for_json(payload_flat)
 
     return {
         "status": "base_pipeline_ok",
-        "payload_flat": payload_flat
+        "payload_flat": payload_flat,
+        "google_places_csv": csv_path
     }
