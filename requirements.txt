@@ -12,3 +12,4 @@ googlemaps
 openai
 plotly
 openpyxl
+gdown
