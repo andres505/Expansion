@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+
+pandas
+numpy
+shapely
+geopandas
+pyproj
+reportlab
+pillow
+googlemaps
+openai
+plotly
