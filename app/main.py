@@ -39,9 +39,15 @@ def run_expansion(payload: ExpansionRequest):
 
     # 4. Construir payload base del pipeline
     payload_flat = build_payload_flat(
-        input_data=input_data,
-        nearest_store=nearest_store
-    )
+        lat=input_data["latitud"],
+        lon=input_data["longitud"],
+
+        neto_data=nearest_store,      # ← lo que ya calculas con geo.py
+        inegi_data={},                # ← stub temporal
+        places_count={},              # ← stub temporal
+        competencia_data={}            # ← stub temporal
+)
+
 
     return {
         "status": "base_pipeline_ok",
