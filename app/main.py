@@ -183,13 +183,14 @@ def run_expansion(payload: ExpansionRequest):
         lon=lon,
         radius_m=500
     )
-# ---------------------------
-# SUBIR CSV A GOOGLE DRIVE
-# ---------------------------
+
+    # ---------------------------
+    # SUBIR CSV A GOOGLE DRIVE
+    # ---------------------------
     drive_folder_id = (
         input_data.get("id_carpeta_drive")
         or os.environ.get("GOOGLE_PLACES_DRIVE_FOLDER_ID")
-)
+    )
 
     drive_info = None
 
@@ -198,7 +199,7 @@ def run_expansion(payload: ExpansionRequest):
             local_path=csv_path,
             drive_folder_id=drive_folder_id,
             filename=f"google_places_{folio}.csv"
-    )
+        )
 
     # ---------------------------
     # PAYLOAD FINAL BASE
@@ -217,5 +218,7 @@ def run_expansion(payload: ExpansionRequest):
     return {
         "status": "base_pipeline_ok",
         "payload_flat": payload_flat,
-        "google_places_csv": csv_path
+        "google_places_csv_local": csv_path,
+        "google_places_drive": drive_info
     }
+
