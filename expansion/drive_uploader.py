@@ -69,10 +69,12 @@ def upload_file_to_drive(
         .create(
             body=file_metadata,
             media_body=media,
-            fields="id, name, webViewLink"
+            fields="id, name, webViewLink",
+            supportsAllDrives=True
         )
         .execute()
     )
+
 
     return {
         "file_id": file["id"],
