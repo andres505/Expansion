@@ -33,6 +33,7 @@ from expansion.inegi import find_municipio_inegi, prefix_inegi_keys
 from expansion.payload_builder import build_payload_flat
 from expansion.inegi_loader import download_inegi_from_drive
 from expansion.google_places import fetch_places_nearby
+from expansion.drive_uploader import upload_file_to_drive
 
 
 # =====================================================
@@ -181,6 +182,22 @@ def run_expansion(payload: ExpansionRequest):
         lat=lat,
         lon=lon,
         radius_m=500
+    )
+# ---------------------------
+# SUBIR CSV A GOOGLE DRIVE
+# ---------------------------
+    drive_folder_id = (
+        input_data.get("id_carpeta_drive")
+        or os.environ.get("GOOGLE_PLACES_DRIVE_FOLDER_ID")
+)
+
+    drive_info = None
+
+    if drive_folder_id:
+        drive_info = upload_file_to_drive(
+            local_path=csv_path,
+            drive_folder_id=drive_folder_id,
+            filename=f"google_places_{folio}.csv"
     )
 
     # ---------------------------
