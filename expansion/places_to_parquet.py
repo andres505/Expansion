@@ -16,7 +16,7 @@ BQ_COLUMNS = [
     "business_status",
     "place_lat",
     "place_lon",
-    "viewport",
+    "viewport",              # STRING
     "vicinity",
     "types",                 # ARRAY
     "rating",
@@ -40,11 +40,11 @@ def parse_types(value):
 
 def to_string_safe(x):
     if x is None:
-        return None
+        return ""
     if isinstance(x, (dict, list)):
         return json.dumps(x, ensure_ascii=False)
     if pd.isna(x):
-        return None
+        return ""
     return str(x)
 
 
@@ -66,15 +66,15 @@ def places_csv_to_parquet(
     # asegurar columnas
     for col in BQ_COLUMNS:
         if col not in df.columns:
-            df[col] = None
+            df[col] = ""
 
-    # viewport NO se infiere
-    df["viewport"] = None
+    # 🔥 viewport: STRING NO NULL
+    df["viewport"] = ""
 
     # types → ARRAY
     df["types"] = df["types"].apply(parse_types)
 
-    # todo lo demás → STRING
+    # resto → STRING
     for col in df.columns:
         if col != "types":
             df[col] = df[col].apply(to_string_safe)
