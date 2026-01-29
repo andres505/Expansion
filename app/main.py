@@ -288,10 +288,9 @@ def run_expansion(payload: ExpansionRequest):
 
 
     decision_modelo_2 = {
-        "decision": res_con_neto["decision_modelo_2"],
-        "explicacion": res_con_neto["explicacion_modelo_2"]
+        "decision": res_greenfield["decision_modelo_1"],
+        "explicacion": res_greenfield["explicacion_modelo_1"]
     }
-
 
 
 
