@@ -39,6 +39,10 @@ from expansion.bq_loader import load_parquet_to_bq
 from expansion.integracion_comercial import (
     evaluar_integracion_comercial_desde_csv
 )
+from expansion import agent_evaluator
+from expansion import region_vectors
+from expansion import benchmark
+import copy
 
 # =====================================================
 # UTILS
@@ -235,11 +239,69 @@ def run_expansion(payload: ExpansionRequest):
     )
 
     payload_flat = sanitize_for_json(payload_flat)
+    payload_flat.update(integracion_comercial)
+
+    def strip_neto_cercana(payload: dict) -> dict:
+        p = copy.deepcopy(payload)
+        for k in list(p.keys()):
+            if k.startswith("tienda_cercana") or k in [
+                "id_tienda_cercana",
+                "distancia_tienda_cercana_km"
+            ]:
+                p[k] = None
+        return p
+
+    payload_greenfield = strip_neto_cercana(payload_flat)
+
+
+    region_vector = region_vectors.load_region_vector_for_prompt(
+        json_path="data/vectores_promedio_region.json",
+        region=payload_flat.get("region")
+    )
+
+    df_benchmark = benchmark.build_region_benchmark_table(
+        payload=payload_flat,
+       region_vector=region_vector
+    )
+
+    tabla_global = df_benchmark.to_string(index=False)
+    tabla_maduras = ""
+
+    res_con_neto = agent_evaluator.evaluate_site_dual(
+        payload=payload_flat,
+        region_vector=region_vector,
+        tabla_global=tabla_global,
+        tabla_maduras=tabla_maduras
+    )
+
+    res_greenfield = agent_evaluator.evaluate_site_dual(
+        payload=payload_greenfield,
+        region_vector=region_vector,
+        tabla_global=tabla_global,
+        tabla_maduras=tabla_maduras
+    )
+
+    decision_modelo_1 = {
+        "decision": res_con_neto["decision_modelo_1"],
+        "explicacion": res_con_neto["explicacion_1"]
+    }
+
+    decision_modelo_2 = {
+        "decision": res_greenfield["decision_modelo_1"],
+        "explicacion": res_greenfield["explicacion_1"]
+    }
+
+
 
     return {
-        "status": "base_pipeline_ok",
+        "status": "expansion_ok",
+
         "payload_flat": payload_flat,
         "integracion_comercial": integracion_comercial,
+
+        "decision_modelo_1": decision_modelo_1,
+        "decision_modelo_2": decision_modelo_2,
+
         "google_places_csv_local": csv_path,
         "google_places_drive": drive_info
     }
