@@ -36,6 +36,9 @@ from expansion.google_places import fetch_places_nearby
 from expansion.drive_uploader import upload_file_to_drive
 from expansion.places_to_parquet import places_csv_to_parquet
 from expansion.bq_loader import load_parquet_to_bq
+from expansion.integracion_comercial import (
+    evaluar_integracion_comercial_desde_csv
+)
 
 # =====================================================
 # UTILS
@@ -184,6 +187,16 @@ def run_expansion(payload: ExpansionRequest):
         lon=lon,
         radius_m=500
     )
+# ---------------------------
+# INTEGRACIÓN COMERCIAL
+# ---------------------------
+    integracion_comercial = evaluar_integracion_comercial_desde_csv(
+        csv_path=csv_path
+    )
+    integracion_comercial = sanitize_for_json(integracion_comercial)
+
+
+
     parquet_path = places_csv_to_parquet(
         csv_path=csv_path
     )
@@ -226,6 +239,7 @@ def run_expansion(payload: ExpansionRequest):
     return {
         "status": "base_pipeline_ok",
         "payload_flat": payload_flat,
+        "integracion_comercial": integracion_comercial,
         "google_places_csv_local": csv_path,
         "google_places_drive": drive_info
     }
