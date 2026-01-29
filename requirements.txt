@@ -13,7 +13,15 @@ openai
 plotly
 openpyxl
 gdown
+
+# Google Drive
 google-api-python-client>=2.120.0
 google-auth>=2.25.0
 google-auth-httplib2>=0.2.0
 google-auth-oauthlib>=1.2.0
+
+# BigQuery (ESTE FALTABA)
+google-cloud-bigquery>=3.17.0
+
+# Parquet
+pyarrow>=15.0.0
