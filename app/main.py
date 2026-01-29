@@ -34,7 +34,8 @@ from expansion.payload_builder import build_payload_flat
 from expansion.inegi_loader import download_inegi_from_drive
 from expansion.google_places import fetch_places_nearby
 from expansion.drive_uploader import upload_file_to_drive
-
+from expansion.places_to_parquet import places_csv_to_parquet
+from expansion.bq_loader import load_parquet_to_bq
 
 # =====================================================
 # UTILS
@@ -183,7 +184,14 @@ def run_expansion(payload: ExpansionRequest):
         lon=lon,
         radius_m=500
     )
+    parquet_path = places_csv_to_parquet(
+        csv_path=csv_path
+    )
 
+    bq_info = load_parquet_to_bq(
+        parquet_path=parquet_path,
+        table_id="neto-cloud.agente_sitios_vokse.places_poi_search"
+    )
     # ---------------------------
     # SUBIR CSV A GOOGLE DRIVE
     # ---------------------------
