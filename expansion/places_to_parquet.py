@@ -5,9 +5,6 @@ import json
 import os
 
 
-# ======================================================
-# COLUMNAS EXACTAS DE BIGQUERY (orden importa)
-# ======================================================
 BQ_COLUMNS = [
     "ID_lugar",
     "query_lat",
@@ -19,9 +16,9 @@ BQ_COLUMNS = [
     "business_status",
     "place_lat",
     "place_lon",
-    "viewport",              # STRING en BQ (se fuerza a NULL)
+    "viewport",
     "vicinity",
-    "types",
+    "types",                 # ARRAY
     "rating",
     "user_ratings_total",
     "price_level",
@@ -31,16 +28,17 @@ BQ_COLUMNS = [
 ]
 
 
-# ======================================================
-# HELPERS
-# ======================================================
-def _to_string_safe(x):
-    """
-    Convierte cualquier valor a STRING compatible con BigQuery.
-    - dict / list -> JSON string
-    - NaN / None -> None
-    - resto -> str
-    """
+def parse_types(value):
+    if value is None or value == "":
+        return []
+    try:
+        parsed = json.loads(value)
+        return parsed if isinstance(parsed, list) else []
+    except Exception:
+        return []
+
+
+def to_string_safe(x):
     if x is None:
         return None
     if isinstance(x, (dict, list)):
@@ -50,56 +48,39 @@ def _to_string_safe(x):
     return str(x)
 
 
-# ======================================================
-# MAIN
-# ======================================================
 def places_csv_to_parquet(
     *,
     csv_path: str,
     parquet_path: str | None = None
 ) -> str:
+
     if not os.path.exists(csv_path):
         raise FileNotFoundError(csv_path)
 
-    # --------------------------------------------------
-    # Leer CSV
-    # --------------------------------------------------
-    df = pd.read_csv(csv_path)
+    df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
 
-    # --------------------------------------------------
-    # Renombres
-    # --------------------------------------------------
+    # folio → ID_lugar
     if "folio" in df.columns:
         df = df.rename(columns={"folio": "ID_lugar"})
 
-    # --------------------------------------------------
-    # Asegurar TODAS las columnas del schema BQ
-    # --------------------------------------------------
+    # asegurar columnas
     for col in BQ_COLUMNS:
         if col not in df.columns:
             df[col] = None
 
-    # --------------------------------------------------
-    # 🔴 FIX CRÍTICO
-    # viewport NO viene del CSV
-    # y NO debe inferirse → siempre STRING NULL
-    # --------------------------------------------------
+    # viewport NO se infiere
     df["viewport"] = None
 
-    # --------------------------------------------------
-    # Reordenar exactamente como BQ
-    # --------------------------------------------------
+    # types → ARRAY
+    df["types"] = df["types"].apply(parse_types)
+
+    # todo lo demás → STRING
+    for col in df.columns:
+        if col != "types":
+            df[col] = df[col].apply(to_string_safe)
+
     df = df[BQ_COLUMNS]
 
-    # --------------------------------------------------
-    # Forzar STRING en TODO
-    # --------------------------------------------------
-    for col in df.columns:
-        df[col] = df[col].apply(_to_string_safe).astype("string")
-
-    # --------------------------------------------------
-    # Output parquet
-    # --------------------------------------------------
     if parquet_path is None:
         parquet_path = csv_path.replace(".csv", ".parquet")
 
