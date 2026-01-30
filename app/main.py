@@ -295,16 +295,20 @@ def run_expansion(payload: ExpansionRequest):
 
 
     return {
-        "DEBUG_KEYS": [
-            "status",
-            "payload_flat",
-            "integracion_comercial",
-            "decision_modelo_1",
-            "decision_modelo_2"
-        ],
         "status": "expansion_ok",
+
+        # 🔹 DATA CORE
+        "payload_flat": payload_flat,
+
+        # 🔹 DECISIONES
         "decision_modelo_1": decision_modelo_1,
-        "decision_modelo_2": decision_modelo_2
+        "decision_modelo_2": decision_modelo_2,
+
+        # 🔹 TRAZABILIDAD
+        "google_places": {
+            "csv_local": csv_path,
+            "drive": drive_info
+        }
     }
 
 
