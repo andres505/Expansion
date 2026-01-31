@@ -36,6 +36,7 @@ def _run_agent(prompt: str) -> Dict[str, Any]:
                     "IMPORTANTE – USO DE TIENDA CERCANA\n"
                     "Cuando exista una tienda NETO cercana, el ÚNICO dato válido\n"
                     "para evaluar su desempeño es: 'Prom. monto sin imp.'\n"
+                    "Si integracion comercial es menos de 60, continua con el analisis pero la decision es descartar\n"
                     "Si no está disponible, ignora la tienda cercana."
                 ),
             },
