@@ -14,11 +14,20 @@ def normalize_region_name(region: str) -> str:
     )
 
 
+REGION_ALIAS = {
+    "OAXACA COSTA": "OAXACA"
+}
+
+
 def load_region_vector_for_prompt(json_path: str, region: str) -> dict:
+
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     region_norm = normalize_region_name(region)
+
+    # aplicar alias
+    region_norm = REGION_ALIAS.get(region_norm, region_norm)
 
     region_map = {
         normalize_region_name(k): k
