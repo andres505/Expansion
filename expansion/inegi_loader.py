@@ -1,4 +1,5 @@
 import os
+import sys
 import subprocess
 
 
@@ -20,7 +21,7 @@ def download_inegi_from_drive(folder_id: str):
 
     subprocess.run(
         [
-            "gdown",
+            sys.executable, "-m", "gdown",
             "--folder",
             f"https://drive.google.com/drive/folders/{folder_id}",
             "-O",
