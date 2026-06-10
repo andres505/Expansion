@@ -12,7 +12,8 @@ googlemaps
 openai
 plotly
 openpyxl
-gdown
+gdown>=5.1.0
+
 
 # Google Drive
 google-api-python-client>=2.120.0
