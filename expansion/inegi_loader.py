@@ -26,7 +26,6 @@ def download_inegi_from_drive(folder_id: str):
             f"https://drive.google.com/drive/folders/{folder_id}",
             "-O",
             INEGI_LOCAL_DIR,
-            "--remaining-ok",
         ],
         check=True,
     )
