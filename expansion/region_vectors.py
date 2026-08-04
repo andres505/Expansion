@@ -15,7 +15,21 @@ def normalize_region_name(region: str) -> str:
 
 
 REGION_ALIAS = {
-    "OAXACA COSTA": "OAXACA"
+    "OAXACA COSTA": "OAXACA",
+
+    # Taxonomía nueva del master de tiendas (refresh Jul25-Jun26) que aún no
+    # existe en vectores_promedio_region.json. Mapeo a la región vieja más
+    # cercana geográficamente (mayoría de tiendas de la región nueva) hasta
+    # regenerar los vectores con la taxonomía nueva.
+    "ACAPULCO CENTRO": "ACA ORIENTE",
+    "CHIAPAS SOCONUSCO": "CHIAPAS",
+    "COATZA OLMECA": "TABASCO",
+    "IZTAPALAPA": "NEZA",
+    "OAXACA MIXTECA": "OAXACA",
+    "OCCIDENTE BAJIO": "BAJIO",
+    "OCCIDENTE MICHOACAN NORTE": "MICHOACAN",
+    "OCCIDENTE MICHOACAN SUR": "MICHOACAN",
+    "VALLE": "NEZA",
 }
 
 

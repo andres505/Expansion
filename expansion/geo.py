@@ -63,6 +63,10 @@ def load_neto_master(
     df = pd.read_excel(excel_path)
     df = df[RELEVANT_COLUMNS].copy()
 
+    # "VENTAS ESPECIALES AAA" es un canal de venta, no una región geográfica:
+    # sus 7 tiendas están dispersas en 5 estados y no tienen vector regional.
+    df = df[df["FCREGION"].str.strip().str.upper() != "VENTAS ESPECIALES AAA"]
+
     df["FCLATITUD"] = pd.to_numeric(df["FCLATITUD"], errors="coerce")
     df["FCLONGITUD"] = pd.to_numeric(df["FCLONGITUD"], errors="coerce")
 
