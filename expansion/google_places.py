@@ -110,10 +110,21 @@ def fetch_places_nearby(
                 })
 
             if "next_page_token" in response:
-                time.sleep(2)
-                response = gmaps.places_nearby(
-                    page_token=response["next_page_token"]
-                )
+                # El token tarda unos segundos en activarse; si se usa antes,
+                # Google responde INVALID_REQUEST. Reintentamos con espera
+                # creciente y si nunca activa seguimos con lo ya obtenido.
+                token = response["next_page_token"]
+                response = None
+                for intento in range(4):
+                    time.sleep(2 + intento)
+                    try:
+                        response = gmaps.places_nearby(page_token=token)
+                        break
+                    except googlemaps.exceptions.ApiError as e:
+                        if getattr(e, "status", None) != "INVALID_REQUEST":
+                            raise
+                if response is None:
+                    break
             else:
                 break
 
